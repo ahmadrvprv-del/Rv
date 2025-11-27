@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RV Voice Generator - Professional AI TTS</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- JSZip for Bulk Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Segoe UI', 'sans-serif'],
+                    },
+                    colors: {
+                        bgMain: '#000000',      /* Pitch Black */
+                        bgCard: '#09090b',      /* Zinc 950 */
+                        bgInput: '#18181b',     /* Zinc 900 */
+                        borderColor: '#27272a', /* Zinc 800 */
+                        accent: '#ffffff',      /* White Accent */
+                        accentDim: '#a1a1aa',   /* Zinc 400 */
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #000000; color: #e4e4e7; font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        
+        /* Interactive Elements */
+        .voice-card { 
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+            border: 1px solid #27272a; 
+        }
+        .voice-card:hover { 
+            border-color: #52525b; 
+            background-color: #18181b;
+        }
+        .voice-card.selected { 
+            border-color: #ffffff; 
+            background-color: #18181b; 
+            box-shadow: 0 0 0 1px #ffffff;
+        }
+        
+        /* Animations */
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+        .btn-pulse { animation: pulse-ring 2s infinite; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-white selection:text-black">
+
+    <!-- ERROR MODAL -->
+    <div id="errorModal" class="hidden fixed inset-0 z-[100] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-bgInput border border-red-900/50 rounded-2xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div class="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                <i class="fas fa-exclamation text-xl text-red-500"></i>
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2">System Alert</h3>
+            <p id="errorDesc" class="text-zinc-400 text-sm mb-6 break-words">An error occurred.</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="closeErrorModal()" class="px-5 py-2.5 bg-zinc-800 text-zinc-300 rounded-lg text-sm hover:bg-zinc-700 transition">Close</button>
+                <button onclick="retryLastAction()" class="px-5 py-2.5 bg-white text-black font-semibold rounded-lg text-sm hover:bg-gray-200 transition">Retry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NAVBAR -->
+    <header class="border-b border-borderColor bg-black/80 sticky top-0 z-50 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <!-- Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black shadow-lg shadow-white/10">
+                    <i class="fas fa-microphone-lines text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-tight">RV Voice Generator</h1>
+                    <div class="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Professional Studio</div>
+                </div>
+            </div>
+
+            <!-- API Key Area -->
+            <div class="flex items-center gap-2 w-full md:w-auto bg-bgInput p-1.5 rounded-xl border border-borderColor">
+                <div class="relative flex-1 md:w-64">
+                    <i class="fas fa-key absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-xs"></i>
+                    <input type="password" id="apiKeyInput" placeholder="Google AI Studio Key" 
+                        class="w-full bg-transparent text-xs text-white pl-8 pr-3 py-2 focus:outline-none placeholder-zinc-700 font-mono">
+                </div>
+                <button onclick="saveApiKey()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-medium transition">Save</button>
+                <button onclick="testConnection()" id="testBtn" class="bg-white hover:bg-gray-200 text-black px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                    Test
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full px-6 py-10 space-y-10">
+
+        <!-- GRID LAYOUT -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- LEFT: SCRIPT INPUT (7 Cols) -->
+            <div class="lg:col-span-7 space-y-4">
+                <div class="flex justify-between items-center px-1">
+                    <h2 class="text-xs font-bold text-zinc-500 uppercase tracking-wider"><i class="fas fa-align-left mr-2"></i> Script Editor</h2>
+                    <span id="segmentCounter" class="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-1 rounded border border-zinc-700">0 Segments Ready</span>
+                </div>
+                
+                <div class="relative group h-[500px]">
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 pointer-events-none rounded-2xl"></div>
+                    <textarea id="mainInput" oninput="parseSegments()" placeholder="Enter your script here...&#10;&#10;1. First segment text...&#10;2. Second segment text...&#10;3. Third segment text..." 
+                        class="w-full h-full bg-bgCard border border-borderColor rounded-2xl p-6 text-zinc-300 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-all resize-none font-sans text-sm leading-7 shadow-inner"></textarea>
+                    
+                    <div class="absolute bottom-4 right-6 text-[10px] text-zinc-600 bg-bgMain/80 px-2 py-1 rounded backdrop-blur border border-zinc-800">
+                        Auto-Format Active
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: VOICE SELECTOR (5 Cols) -->
+            <div class="lg:col-span-5 space-y-4 flex flex-col h-[500px]">
+                <div class="flex justify-between items-center px-1">
+                    <h2 class="text-xs font-bold text-zinc-500 uppercase tracking-wider"><i class="fas fa-users-viewfinder mr-2"></i> Voice Cast</h2>
+                    <div class="flex gap-2 text-[10px]">
+                        <button onclick="filterVoices('all')" class="text-white hover:underline">All</button>
+                        <span class="text-zinc-700">|</span>
+                        <button onclick="filterVoices('Male')" class="text-zinc-400 hover:text-white">Male</button>
+                        <span class="text-zinc-700">|</span>
+                        <button onclick="filterVoices('Female')" class="text-zinc-400 hover:text-white">Female</button>
+                    </div>
+                </div>
+
+                <div class="bg-bgCard border border-borderColor rounded-2xl flex-1 overflow-hidden flex flex-col">
+                    <!-- Voice List Container -->
+                    <div id="voiceGrid" class="overflow-y-auto p-2 space-y-1 flex-1 custom-scrollbar">
+                        <!-- JS Injected -->
+                    </div>
+                    <!-- Selected Voice Footer -->
+                    <div class="p-3 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center text-xs">
+                        <span class="text-zinc-500">Selected:</span>
+                        <span id="selectedVoiceName" class="font-bold text-white">None</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTION BAR -->
+        <div class="border-t border-zinc-800 pt-8">
+            <div class="flex flex-col md:flex-row items-center gap-6">
+                
+                <!-- Main Button -->
+                <button id="generateBtn" onclick="startProcess()" disabled 
+                    class="group w-full md:w-auto min-w-[200px] px-8 py-4 bg-white text-black rounded-xl font-bold text-sm hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                    <i class="fas fa-bolt text-lg group-hover:text-yellow-600 transition-colors"></i>
+                    <span id="btnText">Generate Audio</span>
+                </button>
+
+                <!-- Status / Optimization -->
+                <div id="quotaStats" class="hidden flex-1 w-full flex items-center gap-4 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800">
+                    <div class="bg-green-500/10 text-green-400 p-2 rounded-lg">
+                        <i class="fas fa-leaf"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-xs text-zinc-400">Optimization Active</div>
+                        <div class="text-sm font-bold text-white"><span id="savedPercent">0%</span> Quota Saved</div>
+                    </div>
+                    <div class="text-right px-4 border-l border-zinc-800">
+                        <div class="text-[10px] text-zinc-500 uppercase">Batch</div>
+                        <div class="font-mono text-white">1 Call</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="progressContainer" class="hidden mt-6 max-w-2xl">
+                <div class="flex justify-between text-[10px] text-zinc-400 mb-2 font-mono uppercase">
+                    <span id="progressText">Initializing...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                    <div id="progressBar" class="h-full bg-white w-0 transition-all duration-300 ease-out"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESULTS SECTION -->
+        <div id="resultSection" class="hidden pb-20">
+            <div class="flex justify-between items-end mb-6 border-b border-zinc-800 pb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white">Production Output</h2>
+                    <p class="text-xs text-zinc-500 mt-1">Files are ready for download or playback.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="playAll()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-medium transition">
+                        <i class="fas fa-play mr-2"></i>Play All
+                    </button>
+                    <button onclick="downloadAll()" class="px-4 py-2 bg-white hover:bg-gray-200 text-black rounded-lg text-xs font-bold transition shadow-lg shadow-white/5">
+                        <i class="fas fa-file-zipper mr-2"></i>Download ZIP
+                    </button>
+                </div>
+            </div>
+
+            <div id="segmentList" class="grid grid-cols-1 gap-3">
+                <!-- Segment Items -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-zinc-900 bg-black py-8 mt-auto">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center text-xs text-zinc-600 gap-4">
+            <div>
+                &copy; 2024 RV Voice Generator. All rights reserved.
+            </div>
+            <div class="flex items-center gap-2">
+                <span>Created by</span>
+                <span class="bg-zinc-900 text-zinc-400 px-3 py-1 rounded-full border border-zinc-800 font-medium">A Ahmad RV</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- LOGIC -->
+    <script>
+        // --- DATA: EXTENDED VOICE LIBRARY ---
+        // IMPORTANT: We map User Personas (ids) to Valid API Voice Names (apiId)
+        // This ensures every character works while providing diversity in labels.
+        const voices = [
+            // --- MALE (Based on Valid IDs: Orus, Puck, Fenrir, Zephyr, Charon) ---
+            { id: 'm1', apiId: 'Orus', name: 'Carlse', gender: 'Male', category: 'Standard', desc: 'Deep & Confident' },
+            { id: 'm2', apiId: 'Puck', name: 'Arthur', gender: 'Male', category: 'Storyteller', desc: 'Engaging Storyteller' },
+            { id: 'm3', apiId: 'Fenrir', name: 'William', gender: 'Male', category: 'Standard', desc: 'Soft Spoken' },
+            { id: 'm4', apiId: 'Zephyr', name: 'James', gender: 'Male', category: 'Standard', desc: 'Empathetic & Calm' },
+            { id: 'm5', apiId: 'Charon', name: 'Marcus', gender: 'Male', category: 'Deep', desc: 'Deep Documentary' },
+            { id: 'm6', apiId: 'Zephyr', name: 'David', gender: 'Male', category: 'Energetic', desc: 'Energetic Host' }, // Reusing Zephyr
+            { id: 'm7', apiId: 'Orus', name: 'Robert', gender: 'Male', category: 'Standard', desc: 'Professional Corp' }, // Reusing Orus
+            { id: 'm8', apiId: 'Fenrir', name: 'Thomas', gender: 'Male', category: 'Standard', desc: 'Casual Conversation' }, // Reusing Fenrir
+            { id: 'm9', apiId: 'Charon', name: 'Michael', gender: 'Male', category: 'Deep', desc: 'Intense Narration' }, // Reusing Charon
+            { id: 'm10', apiId: 'Puck', name: 'Richard', gender: 'Male', category: 'Standard', desc: 'Friendly Guide' }, // Reusing Puck
+            { id: 'm11', apiId: 'Puck', name: 'Joseph', gender: 'Male', category: 'Storyteller', desc: 'Classic Reading' }, // Reusing Puck
+            { id: 'm12', apiId: 'Zephyr', name: 'Daniel', gender: 'Male', category: 'Energetic', desc: 'Promo Voice' }, // Reusing Zephyr
+
+            // --- FEMALE (Based on Valid IDs: Kore, Leda, Aoede, Callirrhoe, Autonoe) ---
+            { id: 'f1', apiId: 'Kore', name: 'Sarah', gender: 'Female', category: 'Standard', desc: 'Soothing & Clear' },
+            { id: 'f2', apiId: 'Leda', name: 'Eleanor', gender: 'Female', category: 'Grandma', desc: 'Soft Grandma' },
+            { id: 'f3', apiId: 'Aoede', name: 'Emma', gender: 'Female', category: 'Calm', desc: 'Calm Audiobook' },
+            { id: 'f4', apiId: 'Callirrhoe', name: 'Elizabeth', gender: 'Female', category: 'Standard', desc: 'Elegant & Poised' },
+            { id: 'f5', apiId: 'Autonoe', name: 'Jennifer', gender: 'Female', category: 'Standard', desc: 'Loving & Warm' },
+            { id: 'f6', apiId: 'Kore', name: 'Jessica', gender: 'Female', category: 'Energetic', desc: 'Bright & Cheerful' }, // Reusing Kore
+            { id: 'f7', apiId: 'Aoede', name: 'Emily', gender: 'Female', category: 'Standard', desc: 'Modern Assistant' }, // Reusing Aoede
+            { id: 'f8', apiId: 'Leda', name: 'Olivia', gender: 'Female', category: 'Standard', desc: 'Neutral News' }, // Reusing Leda
+            { id: 'f9', apiId: 'Autonoe', name: 'Sophia', gender: 'Female', category: 'Standard', desc: 'Soft Whisper' }, // Reusing Autonoe
+            { id: 'f10', apiId: 'Callirrhoe', name: 'Isabella', gender: 'Female', category: 'Calm', desc: 'Meditation Guide' }, // Reusing Callirrhoe
+            { id: 'f11', apiId: 'Kore', name: 'Mia', gender: 'Female', category: 'Standard', desc: 'Young & Fresh' }, // Reusing Kore
+            { id: 'f12', apiId: 'Aoede', name: 'Charlotte', gender: 'Female', category: 'Storyteller', desc: 'Fantasy Narrator' }, // Reusing Aoede
+            { id: 'f13', apiId: 'Leda', name: 'Amelia', gender: 'Female', category: 'Standard', desc: 'Direct Professional' } // Reusing Leda
+        ];
+
+        let state = {
+            apiKey: localStorage.getItem('rv_voice_key') || '',
+            selectedVoice: 'm1', // Default to Carlse
+            segments: [],
+            fullAudioBlob: null,
+            audioContext: null,
+            slicedBlobs: [],
+            cache: {},
+            previewAudio: null,
+            filter: 'all'
+        };
+
+        // --- INIT ---
+        window.onload = () => {
+            if(state.apiKey) document.getElementById('apiKeyInput').value = state.apiKey;
+            renderVoices();
+            updateSelectedName();
+        };
+
+        // --- VOICE UI LOGIC ---
+        function filterVoices(filterType) {
+            state.filter = filterType;
+            renderVoices();
+        }
+
+        function renderVoices() {
+            const grid = document.getElementById('voiceGrid');
+            const filtered = voices.filter(v => state.filter === 'all' || v.gender === state.filter);
+            
+            grid.innerHTML = filtered.map(v => {
+                const isSelected = state.selectedVoice === v.id;
+                const icon = v.gender === 'Male' ? 'fa-mars' : 'fa-venus';
+                const colorClass = v.gender === 'Male' ? 'text-blue-400' : 'text-pink-400';
+                
+                // Determine Badge based on Category
+                let badgeColor = 'bg-zinc-800 text-zinc-400';
+                if(v.category === 'Deep') badgeColor = 'bg-purple-900/30 text-purple-400 border border-purple-800/50';
+                if(v.category === 'Storyteller') badgeColor = 'bg-amber-900/30 text-amber-400 border border-amber-800/50';
+                if(v.category === 'Energetic') badgeColor = 'bg-orange-900/30 text-orange-400 border border-orange-800/50';
+                if(v.category === 'Calm' || v.category === 'Grandma') badgeColor = 'bg-teal-900/30 text-teal-400 border border-teal-800/50';
+
+                return `
+                <div class="voice-card p-3 rounded-xl cursor-pointer flex items-center justify-between group ${isSelected ? 'selected' : 'bg-transparent'}"
+                     onclick="selectVoice('${v.id}')">
+                    
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800 group-hover:border-zinc-600 transition">
+                            <i class="fas ${icon} ${colorClass} text-sm"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-sm text-zinc-200">${v.name}</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded ${badgeColor} uppercase tracking-wider">${v.category}</span>
+                            </div>
+                            <div class="text-[11px] text-zinc-500 group-hover:text-zinc-400 transition">${v.desc}</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <!-- Preview Button -->
+                        <button onclick="previewVoice(event, '${v.id}')" 
+                            class="w-8 h-8 rounded-full bg-zinc-900 hover:bg-white hover:text-black text-zinc-400 flex items-center justify-center transition border border-zinc-800"
+                            title="Preview Voice">
+                            <i class="fas fa-play text-xs" id="icon-preview-${v.id}"></i>
+                        </button>
+                        
+                        <!-- Selection Indicator -->
+                        <div class="w-4 h-4 rounded-full border border-zinc-700 flex items-center justify-center ${isSelected ? 'bg-white border-white' : ''}">
+                            ${isSelected ? '<i class="fas fa-check text-[8px] text-black"></i>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        function selectVoice(id) {
+            state.selectedVoice = id;
+            renderVoices();
+            updateSelectedName();
+        }
+
+        function updateSelectedName() {
+            const v = voices.find(x => x.id === state.selectedVoice);
+            if(v) document.getElementById('selectedVoiceName').innerText = `${v.name} (${v.gender})`;
+        }
+
+        // --- PREVIEW FUNCTIONALITY ---
+        async function previewVoice(e, voiceId) {
+            e.stopPropagation(); // Prevent card selection when clicking play
+            
+            if(!state.apiKey) {
+                showError("Please enter and save your API Key to preview voices.");
+                return;
+            }
+
+            const btnIcon = document.getElementById(`icon-preview-${voiceId}`);
+            const v = voices.find(x => x.id === voiceId);
+            
+            // If already playing this voice, stop it
+            if(state.previewAudio && !state.previewAudio.paused && state.previewAudio.voiceId === voiceId) {
+                state.previewAudio.pause();
+                btnIcon.className = 'fas fa-play text-xs';
+                return;
+            }
+
+            // Stop any other preview
+            if(state.previewAudio) {
+                state.previewAudio.pause();
+                // Reset all icons
+                document.querySelectorAll('[id^="icon-preview-"]').forEach(el => el.className = 'fas fa-play text-xs');
+            }
+
+            btnIcon.className = 'fas fa-spinner fa-spin text-xs'; // Loading
+
+            try {
+                // Short cache key for previews
+                const cacheKey = `preview_${v.apiId}`; // Use API ID for cache to share common voice samples
+                let blob = state.cache[cacheKey];
+
+                if(!blob) {
+                    const text = `Hello, I am ${v.name}. Ready to create professional content.`;
+                    // IMPORTANT: Pass v.apiId, not the UI ID
+                    blob = await callGeminiTTS(text, v.apiId); 
+                    state.cache[cacheKey] = blob;
+                }
+
+                const url = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+                audio.voiceId = voiceId;
+                state.previewAudio = audio;
+                
+                audio.onended = () => {
+                    btnIcon.className = 'fas fa-play text-xs';
+                };
+                
+                await audio.play();
+                btnIcon.className = 'fas fa-stop text-xs'; // Playing state
+
+            } catch(err) {
+                console.error(err);
+                btnIcon.className = 'fas fa-exclamation text-xs text-red-500';
+                showError("Preview Failed: " + (err.msg || "API Error"));
+                setTimeout(() => btnIcon.className = 'fas fa-play text-xs', 2000);
+            }
+        }
+
+        // --- SCRIPT PARSING ---
+        function parseSegments() {
+            const text = document.getElementById('mainInput').value;
+            const lines = text.split(/\n/);
+            const parsed = [];
+            
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                const match = trimmed.match(/^(\d+)[\.\)]\s+(.+)/);
+                if (match) {
+                    parsed.push({
+                        id: parseInt(match[1]),
+                        text: match[2].trim()
+                    });
+                }
+            });
+
+            state.segments = parsed;
+            document.getElementById('segmentCounter').innerText = `${parsed.length} Segments Ready`;
+            
+            const btn = document.getElementById('generateBtn');
+            const hasKey = !!state.apiKey;
+            btn.disabled = parsed.length === 0 || !hasKey;
+            
+            // Optimization Stats
+            if(parsed.length > 0) {
+                document.getElementById('quotaStats').classList.remove('hidden');
+                document.getElementById('quotaStats').classList.add('flex');
+                const saving = ((parsed.length - 1) / parsed.length) * 100;
+                document.getElementById('savedPercent').innerText = parsed.length > 1 ? `${Math.round(saving)}%` : '0%';
+            } else {
+                document.getElementById('quotaStats').classList.add('hidden');
+                document.getElementById('quotaStats').classList.remove('flex');
+            }
+        }
+
+        // --- API & GENERATION ---
+        function saveApiKey() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if(!key) { showError("Please enter a key"); return; }
+            localStorage.setItem('rv_voice_key', key);
+            state.apiKey = key;
+            parseSegments(); // Re-validate button
+            // Visual feedback
+            const btn = document.querySelector('button[onclick="saveApiKey()"]');
+            const oldText = btn.innerText;
+            btn.innerText = "Saved!";
+            setTimeout(() => btn.innerText = oldText, 2000);
+        }
+
+        async function testConnection() {
+            if(!state.apiKey) { showError("Enter API Key first"); return; }
+            const btn = document.getElementById('testBtn');
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${state.apiKey}`;
+                const res = await fetch(url, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "Hi" }] }] })
+                });
+                if(!res.ok) throw new Error("Invalid Key");
+                btn.innerHTML = '<i class="fas fa-check text-green-600"></i>';
+            } catch(e) {
+                btn.innerHTML = '<i class="fas fa-times text-red-600"></i>';
+                showError("Connection failed. Check your API Key.");
+            }
+            setTimeout(() => btn.innerText = "Test", 2000);
+        }
+
+        async function startProcess() {
+            if (!state.segments.length) return;
+            
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('resultSection').classList.add('hidden');
+            document.getElementById('generateBtn').disabled = true;
+            updateProgress(5, "Initializing Studio...");
+
+            try {
+                // Find selected voice object
+                const currentVoice = voices.find(v => v.id === state.selectedVoice);
+                if(!currentVoice) throw { msg: "Voice selection error" };
+
+                // 1. Generate Full Audio
+                const fullText = state.segments.map(s => s.text).join(" ... "); 
+                
+                // Check Cache using API ID to maximize hit rate
+                const cacheKey = `${currentVoice.apiId}_FULL_${fullText.length}_${fullText.substring(0,10)}`;
+                
+                if (state.cache[cacheKey]) {
+                    updateProgress(30, "Loading from Cache...");
+                    state.fullAudioBlob = state.cache[cacheKey];
+                    await new Promise(r => setTimeout(r, 300));
+                } else {
+                    updateProgress(15, `Synthesizing ${state.segments.length} segments with ${currentVoice.name}...`);
+                    // IMPORTANT: Use currentVoice.apiId here
+                    state.fullAudioBlob = await callGeminiTTS(fullText, currentVoice.apiId);
+                    state.cache[cacheKey] = state.fullAudioBlob;
+                }
+
+                // 2. Decode
+                updateProgress(50, "Processing Audio Waveform...");
+                state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const arrayBuffer = await state.fullAudioBlob.arrayBuffer();
+                state.audioBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
+
+                // 3. Slice
+                updateProgress(75, "Precision Slicing...");
+                const cutPoints = calculateCutPoints(state.audioBuffer, state.segments);
+                state.slicedBlobs = await performParallelSlicing(state.audioBuffer, cutPoints);
+
+                // 4. Render
+                updateProgress(100, "Finalizing...");
+                renderResults(state.slicedBlobs);
+
+            } catch (err) {
+                showError(err.msg || err.message);
+            } finally {
+                document.getElementById('generateBtn').disabled = false;
+            }
+        }
+
+        async function callGeminiTTS(text, voiceId) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${state.apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: text }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceId } } }
+                }
+            };
+
+            const response = await fetch(url, {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(()=>({}));
+                throw { msg: err.error?.message || "API Error: " + response.statusText };
+            }
+
+            const data = await response.json();
+            if (!data.candidates?.[0]?.content?.parts?.[0]?.inlineData) throw { msg: "No audio returned." };
+
+            const binaryString = atob(data.candidates[0].content.parts[0].inlineData.data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            
+            return addWavHeader(bytes, 24000, 1);
+        }
+
+        // --- AUDIO PROCESSING (WAV & SLICING) ---
+        function addWavHeader(samples, sampleRate, numChannels) {
+            const buffer = new ArrayBuffer(44 + samples.length);
+            const view = new DataView(buffer);
+            const writeString = (view, offset, string) => {
+                for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+            };
+            
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length, true);
+
+            const pcmData = new Uint8Array(buffer, 44);
+            pcmData.set(samples);
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function calculateCutPoints(buffer, segments) {
+            const rawData = buffer.getChannelData(0);
+            const sampleRate = buffer.sampleRate;
+            const silences = [];
+            let isSilent = false, silenceStart = 0;
+
+            for (let i = 0; i < rawData.length; i += 50) {
+                if (Math.abs(rawData[i]) < 0.015) {
+                    if (!isSilent) { isSilent = true; silenceStart = i; }
+                } else if (isSilent) {
+                    const duration = (i - silenceStart) / sampleRate;
+                    if (duration > 0.25) silences.push({ mid: (silenceStart + i) / 2 / sampleRate });
+                    isSilent = false;
+                }
+            }
+
+            const totalChars = segments.reduce((sum, s) => sum + s.text.length, 0);
+            let currentTheory = 0;
+            const cuts = [];
+
+            segments.forEach((seg, idx) => {
+                const theoryEnd = currentTheory + ((seg.text.length / totalChars) * buffer.duration);
+                let bestEnd = theoryEnd;
+                let minDist = Infinity;
+
+                silences.forEach(s => {
+                    const d = Math.abs(s.mid - theoryEnd);
+                    if (d < minDist) { minDist = d; bestEnd = s.mid; }
+                });
+
+                // Provide reasonable fallback if silence not found near theory
+                if (minDist > 5.0) bestEnd = theoryEnd; 
+                if (idx === segments.length - 1) bestEnd = buffer.duration;
+
+                cuts.push({ start: idx === 0 ? 0 : cuts[idx-1].end, end: bestEnd });
+                currentTheory = theoryEnd;
+            });
+            return cuts;
+        }
+
+        async function performParallelSlicing(fullBuffer, cuts) {
+            return Promise.all(cuts.map(async (cut) => {
+                const sr = fullBuffer.sampleRate;
+                const start = Math.floor(cut.start * sr);
+                const end = Math.floor(cut.end * sr);
+                const len = end - start;
+                if (len <= 0) return null;
+
+                const newBuf = state.audioContext.createBuffer(1, len, sr);
+                const newData = newBuf.getChannelData(0);
+                const oldData = fullBuffer.getChannelData(0);
+                for (let i = 0; i < len; i++) newData[i] = oldData[i + start];
+
+                // Convert back to WAV blob
+                // Simplified WAV encoder for the slice
+                const wavData = new Float32Array(len);
+                wavData.set(newData);
+                const pcm16 = new Int16Array(len);
+                for(let i=0; i<len; i++) {
+                    let s = Math.max(-1, Math.min(1, wavData[i]));
+                    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                const wavBlob = addWavHeader(new Uint8Array(pcm16.buffer), sr, 1);
+                
+                return { blob: wavBlob, meta: cut };
+            }));
+        }
+
+        // --- UI RESULTS ---
+        function renderResults(blobs) {
+            const list = document.getElementById('segmentList');
+            list.innerHTML = '';
+            
+            blobs.forEach((item, idx) => {
+                const seg = state.segments[idx];
+                const url = URL.createObjectURL(item.blob);
+                const duration = (item.meta.end - item.meta.start).toFixed(1);
+                
+                list.innerHTML += `
+                    <div class="bg-bgCard border border-borderColor rounded-xl p-4 flex flex-col md:flex-row items-center gap-4 group hover:bg-zinc-900 transition">
+                        <!-- ID -->
+                        <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center font-bold text-zinc-400 text-sm border border-zinc-700">
+                            ${seg.id}
+                        </div>
+
+                        <!-- Text Info - FIXED OVERFLOW -->
+                        <div class="flex-1 min-w-0 w-full text-left">
+                            <p class="text-zinc-200 text-sm font-medium break-words leading-relaxed">${seg.text}</p>
+                            <p class="text-[10px] text-zinc-500 mt-1 font-mono uppercase">Duration: ${duration}s</p>
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="flex items-center gap-3 w-full md:w-auto justify-end bg-black/20 p-2 rounded-lg border border-transparent group-hover:border-zinc-800 transition">
+                            <audio controls src="${url}" class="h-8 w-32 opacity-70 hover:opacity-100 transition"></audio>
+                            <a href="${url}" download="RV_Seg_${seg.id}.wav" class="text-zinc-400 hover:text-white px-2 transition" title="Download WAV">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('resultSection').classList.remove('hidden');
+            document.getElementById('progressContainer').classList.add('hidden');
+            
+            // Scroll to results
+            document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function downloadAll() {
+            const zip = new JSZip();
+            state.slicedBlobs.forEach((item, i) => zip.file(`RV_Segment_${i + 1}.wav`, item.blob));
+            const content = await zip.generateAsync({ type: "blob" });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(content);
+            a.download = "RV_Voice_Project.zip";
+            a.click();
+        }
+
+        function playAll() {
+            const audios = document.querySelectorAll('#resultSection audio');
+            let idx = 0;
+            const playNext = () => {
+                if (idx < audios.length) {
+                    audios[idx].play();
+                    audios[idx].onended = () => { idx++; playNext(); };
+                }
+            };
+            playNext();
+        }
+
+        // --- UTILS ---
+        function updateProgress(pct, txt) {
+            document.getElementById('progressBar').style.width = `${pct}%`;
+            document.getElementById('progressPercent').innerText = `${pct}%`;
+            document.getElementById('progressText').innerText = txt;
+        }
+
+        function showError(msg) {
+            document.getElementById('errorModal').classList.remove('hidden');
+            document.getElementById('errorDesc').innerText = msg;
+            document.getElementById('progressContainer').classList.add('hidden');
+            document.getElementById('generateBtn').disabled = false;
+        }
+
+        function closeErrorModal() {
+            document.getElementById('errorModal').classList.add('hidden');
+        }
+
+        function retryLastAction() {
+            closeErrorModal();
+            startProcess();
+        }
+    </script>
+</body>
+</html>
+
+
